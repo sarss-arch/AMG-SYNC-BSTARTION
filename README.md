@@ -1,4 +1,4 @@
-# AMG SYNC — Frontend v3
+# AMG SYNC
 
 Frontend prototype terbaru untuk **AMG SYNC — Decision Intelligence Platform**.
 
