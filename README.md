@@ -237,3 +237,36 @@ POST /approvals/{id}/approve
 ```
 
 Backend tetap menjadi authority untuk authentication, authorization, permission, dan data scope.
+
+# AMG SYNC ingestion API
+
+## Install
+```
+pip install fastapi uvicorn asyncpg httpx
+```
+
+## Run order
+```
+psql -U postgres -d amg_sync -f 01_schema.sql
+psql -U postgres -d amg_sync -f 02_static_foundation.sql   # commodities, suppliers
+python3 build_seed_data.py                                 # writes ./json/*.json
+
+export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/amg_sync
+uvicorn app.main:app --reload                               # starts API on :8000
+
+python3 scripts/load_seed_data.py                            # POSTs json/ into the API
+```
+
+## Then, for a training job
+`GET /training-data/priority-scores?year=2025` returns the joined,
+ready-to-use feature table (province, year, consumption, national avg,
+score, rank) — point your actual training code (pandas/sklearn/whatever)
+at that endpoint, or query the same tables directly. Its output should
+land in `model_versions` / `recommendations` — never write to those
+tables from an ingestion endpoint (see main.py's module docstring for why).
+
+## Ongoing (non-seed) ingestion
+Once real data starts arriving (BPS releases a new year, a new market
+price feed, a new supplier quote), it goes through the exact same
+`/ingest/*` endpoints — there's no separate "real data" path to build
+later.
