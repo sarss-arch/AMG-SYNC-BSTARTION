@@ -342,4 +342,106 @@ with open(f"{OUT}/demand_distribution_sample.json", "w") as f:
     }, f, indent=2)
 print(f"Demand (synthetic sample): {len(demand_nodes)} nodes, {len(demand_forecasts)} forecast rows")
 
+# =====================================================================
+# 6. REGIONAL PROTEIN CONSUMPTION — real data, 1778576244.csv
+#    (BPS/Susenas-style, gram/kapita/hari, 34-38 provinces x 2018-2025).
+#    Builds a priority_score per province/year: lower protein consumption
+#    -> higher score -> higher allocation priority. This is the real
+#    dataset meant to train/ground the "prioritize the region with the
+#    lower score" behavior — not a synthetic stand-in like section 5.
+#
+#    NOTE — province_code reuse: BPS renumbered/redistricted Papua in
+#    2022. Code 91 = "Papua Barat" through 2023, then "Papua" from 2024.
+#    Code 94 = "Papua" through 2023, then "Papua Tengah" from 2024. New
+#    codes 92/93/95/96 appear only from 2024 (the split-off provinces).
+#    So provinces are keyed on (code, name), NOT code alone — a naive
+#    dedupe on code would silently merge two different provinces.
+# =====================================================================
+provinces_seen = {}  # (code, name) -> uid
+protein_rows = []
+with open('/mnt/user-data/uploads/1778576244.csv') as f:
+    for r in csv.DictReader(f):
+        code = r["Kode Provinsi"].strip()
+        name = r["Nama Provinsi"].strip()
+        key = (code, name)
+        if key not in provinces_seen:
+            provinces_seen[key] = uid()
+        protein_rows.append({
+            "province_code": code,
+            "province_name": name,
+            "province_uid": provinces_seen[key],
+            "year": int(r["Tahun"]),
+            "protein_consumption_g_per_cap_day": float(r["Konsumsi Protein (gram/kap/hari)"]),
+        })
+
+provinces_out = [{"id": pid, "province_code": c, "name": n} for (c, n), pid in provinces_seen.items()]
+
+# priority score per year: higher score = lower consumption = higher
+# priority. Scored against that year's own national average (the set of
+# provinces reporting changes in 2024 due to the Papua split, so scoring
+# within-year keeps it fair rather than comparing across a shifting
+# province list).
+by_year = {}
+for row in protein_rows:
+    by_year.setdefault(row["year"], []).append(row)
+
+priority_scores = []
+for yr, rows in sorted(by_year.items()):
+    avg = sum(r["protein_consumption_g_per_cap_day"] for r in rows) / len(rows)
+    scored = []
+    for r in rows:
+        score = max(0.0, round(avg - r["protein_consumption_g_per_cap_day"], 2))
+        scored.append({**r, "national_avg_g_per_cap_day": round(avg, 2), "priority_score": score})
+    scored.sort(key=lambda x: -x["priority_score"])
+    for rank, r in enumerate(scored, start=1):
+        r["priority_rank"] = rank
+    priority_scores.extend(scored)
+
+with open(f"{OUT}/provinces.json", "w") as f:
+    json.dump({
+        "_provenance": "REAL — derived from uploaded 1778576244.csv (BPS/Susenas-style "
+                        "provincial protein consumption). Keyed on (province_code, name) "
+                        "because BPS reused numeric codes after the 2022 Papua "
+                        "redistricting — see build_seed_data.py comments.",
+        "provinces": provinces_out,
+    }, f, indent=2)
+
+with open(f"{OUT}/regional_protein_consumption.json", "w") as f:
+    json.dump({
+        "_provenance": "REAL — parsed directly from uploaded 1778576244.csv, no "
+                        "transformation besides typing. gram/kapita/hari, 2018-2025.",
+        "unit": "gram/kapita/hari",
+        "regional_protein_consumption": [
+            {"province_uid": r["province_uid"], "province_code": r["province_code"],
+             "province_name": r["province_name"], "year": r["year"],
+             "protein_consumption_g_per_cap_day": r["protein_consumption_g_per_cap_day"]}
+            for r in protein_rows
+        ],
+    }, f, indent=2)
+
+with open(f"{OUT}/regional_priority_scores.json", "w") as f:
+    json.dump({
+        "_provenance": "REAL data, DERIVED score. protein_consumption values are real "
+                        "(1778576244.csv); priority_score/priority_rank are computed here "
+                        "as (that year's national average minus this province's "
+                        "consumption, floored at 0) — this is the concrete signal meant "
+                        "to train/evaluate 'prioritize the region with the lower score.' "
+                        "Scored within-year to stay fair across the 2024 Papua province "
+                        "split (see build_seed_data.py comments).",
+        "scoring_method": "priority_score = max(0, national_avg_g_per_cap_day - "
+                           "protein_consumption_g_per_cap_day); priority_rank 1 = lowest "
+                           "consumption = highest priority that year.",
+        "regional_priority_scores": [
+            {k: v for k, v in r.items() if k != "province_name"} | {"province_name": r["province_name"]}
+            for r in priority_scores
+        ],
+    }, f, indent=2)
+
+latest_year = max(by_year)
+lowest_latest = min(by_year[latest_year], key=lambda r: r["protein_consumption_g_per_cap_day"])
+print(f"\nRegional protein consumption: {len(provinces_out)} distinct (code,name) provinces, "
+      f"{len(protein_rows)} province-year rows, {min(by_year)}-{latest_year}")
+print(f"  lowest {latest_year} consumption (highest priority): "
+      f"{lowest_latest['province_name']} — {lowest_latest['protein_consumption_g_per_cap_day']} g/kap/hari")
+
 print("\nDone. All files written to ./json/")
