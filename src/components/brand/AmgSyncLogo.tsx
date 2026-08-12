@@ -5,7 +5,7 @@ export function AmgSyncMark({ inverse = false, size = 34 }: { inverse?: boolean;
     <svg width={size} height={size} viewBox="0 0 96 96" fill="none" aria-hidden="true">
       <circle
         cx="48" cy="48" r="30" stroke={ring} strokeWidth="12" strokeLinecap="round"
-        strokeDasharray="151 45" transform="rotate(-42 48 48)"
+        strokeDasharray="141.4 47.1"
       />
       <circle cx="75" cy="29" r="9" fill={dot} />
     </svg>
