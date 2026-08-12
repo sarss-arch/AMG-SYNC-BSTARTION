@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AmgSyncLogo } from "@/components/brand/AmgSyncLogo";
 import { Icon } from "@/components/ui/Icon";
 import { moduleMeta } from "@/config/workspaces";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import type { ModuleId } from "@/types";
 
 const groupOrder = ["Utama", "Intelligence", "Operasional", "Trust & Control"];
 
@@ -15,6 +14,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { ready, user, workspace, membership, signOut } = useWorkspace();
+  
+  // Shield against hydration layout language errors
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!ready) return;
@@ -22,7 +28,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     else if (!workspace || !membership) router.replace("/workspace");
   }, [ready, user, workspace, membership, router]);
 
-  if (!ready || !user || !workspace || !membership) {
+  // Force both server and client to match with a clean loading placeholder
+  if (!mounted || !ready || !user || !workspace || !membership) {
     return <div className="center-state">Menyiapkan workspace AMG SYNC…</div>;
   }
 
