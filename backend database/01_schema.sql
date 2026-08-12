@@ -407,6 +407,46 @@ CREATE TABLE blockchain_anchors (
   anchored_at TIMESTAMPTZ, status TEXT DEFAULT 'PENDING'
 );
 
+-- ============ 9. REGIONAL NUTRITION · PRIORITY SCORING ============
+-- REAL data source (BPS/Susenas-style provincial protein consumption,
+-- gram/kapita/hari, 2018-2025). Feeds a priority score so the Decision
+-- Engine can prefer allocating supply to lower-consumption regions,
+-- instead of a flat/equal split across demand_nodes.
+CREATE TABLE provinces (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  province_code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  -- BPS reused province_code numbers after the 2022 Papua redistricting
+  -- (e.g. code 91 = "Papua Barat" through 2023, then "Papua" from 2024;
+  -- code 94 = "Papua" through 2023, then "Papua Tengah" from 2024).
+  -- So a code alone does NOT uniquely identify a province across years —
+  -- (code, name) together do. Do not dedupe on province_code alone.
+  UNIQUE (province_code, name)
+);
+
+CREATE TABLE regional_protein_consumption (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  province_id UUID REFERENCES provinces(id),
+  year INT NOT NULL,
+  protein_consumption_g_per_cap_day NUMERIC NOT NULL,
+  UNIQUE (province_id, year)
+);
+
+CREATE TABLE regional_priority_scores (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  province_id UUID REFERENCES provinces(id),
+  year INT NOT NULL,
+  protein_consumption_g_per_cap_day NUMERIC,
+  national_avg_g_per_cap_day NUMERIC,
+  -- priority_score: higher = lower protein consumption = higher priority
+  -- for supply allocation. Computed as national_avg minus this province's
+  -- consumption, clipped at 0 (provinces above the national average score 0).
+  priority_score NUMERIC,
+  priority_rank INT,  -- 1 = lowest consumption = highest priority that year
+  UNIQUE (province_id, year)
+);
+CREATE INDEX ON regional_priority_scores (year, priority_rank);
+
 -- =====================================================================
 -- Tables above marked "intentionally NOT seeded" stay empty after
 -- 02_static_foundation.sql and the JSON loader run. They exist so our
