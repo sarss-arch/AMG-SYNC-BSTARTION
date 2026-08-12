@@ -1,0 +1,16 @@
+indicator,value,note
+last_price,312.15,also shown as close (C) on daily chart
+day_high,313.60,labeled H on intraday chart
+day_low,310.50,labeled L on intraday chart
+BB_basis_20_0_2_0,312.35,Bollinger Band value shown
+SMA_20,311.41,
+SMA_50,311.39,
+SMA_200,313.10,
+Stochastic_10_3_1,311.32,
+Resistance_1,313.10,
+Resistance_2,312.50,
+Support_1,311.41,
+Support_2,310.50,
+MACD_line,0.20,approx from legend box
+MACD_signal,0.11,approx from legend box
+timeframe_range,Aug 9 - Aug 12,intraday candles across this window
